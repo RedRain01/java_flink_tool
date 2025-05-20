@@ -1,9 +1,14 @@
-package model;
+package doris_flink.test00001;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 
 import java.math.BigDecimal;
+
+@AllArgsConstructor
 @Data
+@RequiredArgsConstructor
 public class StockTicket {
     public String orderCode;
     public String orderDate;
@@ -20,8 +25,9 @@ public class StockTicket {
     public long buyOrderId;
     public BigDecimal buyOrderPrice;
 
-    public StockTicket(String orderCode, String orderDate, String orderTime, String orderDc, Double price, Long volume, Double sum) {
-    }
+
+
+
 
     // 构造函数、Getter 和 Setter 方法省略
 }
