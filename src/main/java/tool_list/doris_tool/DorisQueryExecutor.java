@@ -3,11 +3,10 @@ package tool_list.doris_tool;
 import tool_list.doris_tool.model.TicketPriceCount;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.*;
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.sql.Date;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -67,62 +66,38 @@ public class DorisQueryExecutor {
 
 
                 String sql = "INSERT INTO ticket_day_detail (" +
-                        "order_code, " +
-                        "order_date, " +
-                        "order_dc, " +
-                        "previous_day_end_price, " +
-                        "next_day_start_price, " +
-                        "start_price, " +
-                        "end_price, " +
-                        "average_price, " +
-                        "up_average_price, " +
-                        "down_average_price, " +
-                        "previous_average_price, " +
-                        "next_average_price, " +
-                        "change_amount, " +
-                        "up_amount, " +
-                        "down_amount, " +
-                        "volume_amount, " +
-                        "turnover_rate, " +
-                        "ten_down_one_rate, " +
-                        "ten_down_two_rate, " +
-                        "ten_down_three_rate, " +
-                        "ten_down_four_rate, " +
-                        "ten_down_five_rate, " +
-                        "ten_zero_rate, " +
-                        "ten_up_one_rate, " +
-                        "ten_up_two_rete, " +
-                        "ten_up_three_rete, " +
-                        "ten_up_four_rate, " +
-                        "ten_up_five_rate, " +
-                        "volume, " +
-                        "circulate_volume, " +
-                        "up_volume, " +
-                        "down_volume, " +
-                        "limit_up_num, " +
-                        "limit_down_num) " +
-
-
-
-
-
-
+                        "ticket_code"+
+                        "trade_date"+
+                        "ticket_dc"+
+                        "price_start"+
+                        "price_end"+
+                        "price_mean"+
+                        "price_mean_up"+
+                        "price_mean_down"+
+                        "price_open30_mean"+
+                        "price_median"+
+                        "price_std"+
+                        "price_max"+
+                        "price_min"+
+                        "price_range"+
+                        "price_skewness"+
+                        "price_kurtosis"+
+                        "volume_total"+
+                        "volume_up"+
+                        "volume_down"+
+                        "volume_open30min"+
+                        "volume_u1_bucket"+
+                        "volume_u2_bucket"+
+                        "volume_u3_bucket"+
+                        "volume_u4_bucket"+
+                        "volume_u5_bucket"+
+                        "volume_d1_bucket"+
+                        "volume_d2_bucket"+
+                        "volume_d3_bucket"+
+                        "volume_d4_bucket"+
+                        "volume_d5_bucket"+
                         "VALUES (?, " +
                         "?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
-                        " ?," +
                         " ?," +
                         " ?," +
                         " ?," +
@@ -226,26 +201,35 @@ public class DorisQueryExecutor {
                     evgDownPrice=BigDecimal.ZERO;
                 }
 
+                BigDecimal stdPrice = weightedStdDev(sortedList);
+                Optional<BigDecimal> minPrice = sortedList.stream().map(TicketPriceCount::getPrice)
+                        .filter(Objects::nonNull)
+                        .min(Comparator.naturalOrder());
+
+                Optional<BigDecimal> maxPrice = sortedList.stream().map(TicketPriceCount::getPrice)
+                        .filter(Objects::nonNull)
+                        .max(Comparator.naturalOrder());
+
                 preparedStatement.setString(1, sortedList.get(0).getOrderCode());
                 preparedStatement.setDate(2, (Date) sortedList.get(0).getOrderDate()); // 当前日期
                 preparedStatement.setString(3, sortedList.get(0).getOrderCode()+"_"+sortedList.get(0).getOrderDate());
-                preparedStatement.setBigDecimal(4, BigDecimal.ZERO);
-                preparedStatement.setBigDecimal(5, BigDecimal.ZERO);
-                preparedStatement.setBigDecimal(6, startPrice);
-                preparedStatement.setBigDecimal(7, endPrice);
-                preparedStatement.setBigDecimal(8,evgPrice);
+                preparedStatement.setBigDecimal(4,startPrice);
+                preparedStatement.setBigDecimal(5, endPrice);
+                preparedStatement.setBigDecimal(6, evgPrice);
+                preparedStatement.setBigDecimal(7, evgUpPrice);
+                preparedStatement.setBigDecimal(8,evgDownPrice);
                 //up_average_price
-                preparedStatement.setBigDecimal(9, evgUpPrice);
+                preparedStatement.setBigDecimal(9, BigDecimal.ZERO);
                 //down_average_price
-                preparedStatement.setBigDecimal(10, evgDownPrice);
+                preparedStatement.setBigDecimal(10, BigDecimal.ZERO);
                 //previous_average_price
-                preparedStatement.setBigDecimal(11, BigDecimal.ZERO);
+                preparedStatement.setBigDecimal(11, stdPrice);
                 //next_average_price
-                preparedStatement.setBigDecimal(12, BigDecimal.ZERO);
+                preparedStatement.setBigDecimal(12, maxPrice.orElse(BigDecimal.ZERO));
                 //change_amount
-                preparedStatement.setBigDecimal(13, BigDecimal.ZERO);
+                preparedStatement.setBigDecimal(13, minPrice.orElse(BigDecimal.ZERO));
                 //up_amount
-                preparedStatement.setBigDecimal(14, upReduce.getKey());
+                preparedStatement.setBigDecimal(14, maxPrice.orElse(BigDecimal.ZERO).subtract() upReduce.getKey());
                 //down_amount
                 preparedStatement.setBigDecimal(15, downReduce.getKey());
                 //volume_amount
@@ -285,6 +269,62 @@ public class DorisQueryExecutor {
         catch (Exception e) {
             System.out.println("----------222---------"+e.getMessage());
          }
+    }
+
+    public static BigDecimal weightedStdDev(List<TicketPriceCount> ticketPriceCounts) {
+        if (ticketPriceCounts == null || ticketPriceCounts.isEmpty()) {
+            throw new IllegalArgumentException("ticket list is null or empty");
+        }
+
+        BigDecimal totalVolume = BigDecimal.ZERO;
+        BigDecimal weightedSum = BigDecimal.ZERO;
+
+        // Step 1: 计算加权均值
+        for (TicketPriceCount ticketPriceCount : ticketPriceCounts) {
+            if (ticketPriceCount == null || ticketPriceCount.getPrice() == null || ticketPriceCount.getVolumeSum() == null) continue;
+            if (ticketPriceCount.getVolumeSum() <= 0) continue;
+
+            BigDecimal price = ticketPriceCount.getPrice();
+            BigDecimal volume = BigDecimal.valueOf(ticketPriceCount.getVolumeSum());
+
+            weightedSum = weightedSum.add(price.multiply(volume));
+            totalVolume = totalVolume.add(volume);
+        }
+
+        if (totalVolume.compareTo(BigDecimal.ZERO) == 0) {
+            throw new IllegalArgumentException("total volume is zero or all data is invalid");
+        }
+
+        BigDecimal weightedMean = weightedSum.divide(totalVolume, 10, RoundingMode.HALF_UP);
+
+        // Step 2: 计算加权方差
+        BigDecimal varianceSum = BigDecimal.ZERO;
+
+        for (TicketPriceCount ticketPriceCount : ticketPriceCounts) {
+            if (ticketPriceCount == null || ticketPriceCount.getPrice() == null || ticketPriceCount.getVolumeSum() == null) continue;
+            if (ticketPriceCount.getVolumeSum() <= 0) continue;
+
+            BigDecimal price = ticketPriceCount.getPrice();
+            BigDecimal volume = BigDecimal.valueOf(ticketPriceCount.getVolumeSum());
+
+            BigDecimal diff = price.subtract(weightedMean);
+            varianceSum = varianceSum.add(diff.pow(2).multiply(volume));
+        }
+
+        BigDecimal variance = varianceSum.divide(totalVolume, 10, RoundingMode.HALF_UP);
+        BigDecimal stdDev = sqrt(variance, 10); // 精确开平方
+
+        return stdDev;
+    }
+
+    // BigDecimal 精确开方实现（牛顿法）
+    public static BigDecimal sqrt(BigDecimal value, int scale) {
+        BigDecimal x = new BigDecimal(Math.sqrt(value.doubleValue()));
+        BigDecimal TWO = BigDecimal.valueOf(2);
+        for (int i = 0; i < 10; i++) {
+            x = x.add(value.divide(x, scale, RoundingMode.HALF_UP)).divide(TWO, scale, RoundingMode.HALF_UP);
+        }
+        return x;
     }
 
     public static void shutdown() {
