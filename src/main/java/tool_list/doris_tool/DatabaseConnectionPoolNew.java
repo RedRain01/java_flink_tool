@@ -12,21 +12,22 @@ public class DatabaseConnectionPoolNew {
 
     static {
         HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:mysql://127.0.0.1:9030/demo");
+        config.setJdbcUrl("jdbc:mysql://192.168.1.5:9030/demo?autoReconnect=true&useSSL=false&serverTimezone=UTC");
         config.setUsername("root");
-        config.setPassword("why123");
+        config.setPassword("");
         config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        config.setLeakDetectionThreshold(10000); // 超过10秒未关闭连接，就记录日志
 
-        // 设置连接池相关参数
+// 连接池核心配置
         config.setConnectionTestQuery("SELECT 1");
-        config.setMaximumPoolSize(500); // 最大连接数
-        config.setMinimumIdle(5);       // 最小空闲连接数
-        config.setIdleTimeout(30000);   // 空闲连接超时
-        config.setConnectionTimeout(30000); // 获取连接的最大等待时间
-        config.setMaxLifetime(600000);   // 连接的最大生命周期
+        config.setMaximumPoolSize(60);
+        config.setMinimumIdle(5);
+        config.setIdleTimeout(30000);         // 30 秒未使用则回收空闲连接
+        config.setConnectionTimeout(300000);   // 300 秒获取不到连接就超时
+        config.setMaxLifetime(1800000);        // 单个连接最多存活30 分钟
+        config.setKeepaliveTime(15000);       // 空闲连接每 30 秒 ping 一次数据库（防止被 kill）
 
         dataSource = new HikariDataSource(config);
-        dataSource.setMaximumPoolSize(900);
     }
 
     public static Connection getConnection() throws SQLException {
