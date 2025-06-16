@@ -1,6 +1,5 @@
 package tool_list.doris_tool;
 
-import org.checkerframework.checker.units.qual.N;
 import tool_list.doris_tool.model.TicketDayPc001Count;
 import tool_list.doris_tool.model.TicketPriceCount;
 import tool_list.doris_tool.model.TicketStkLimit;
@@ -22,12 +21,11 @@ public class DorisQueryExecutor {
     private static final int BATCH_SIZE = 1000;
 
     // 创建一个固定大小的线程池来执行每个SQL任务
-    private static final ExecutorService executorService = Executors.newFixedThreadPool(50);
+    private static final ExecutorService executorService = Executors.newFixedThreadPool(20);
 
-    public static void executeQuery(String code,String date,BigDecimal upPrice,BigDecimal downPrice) {
+    public static Future<?> executeQuery(String code, String date, BigDecimal upPrice, BigDecimal downPrice) {
         // 每个查询任务都交给线程池中的一个独立线程处理
-        try{
-        executorService.submit(() -> {
+        Future<?> future=executorService.submit(() -> {
             Statement statement = null;
             BigDecimal startPrice=BigDecimal.ZERO;
             BigDecimal endPrice=null;
@@ -214,13 +212,10 @@ public class DorisQueryExecutor {
                 ticketDayPc001Count.setVolumeD4Bucket(bucketsMap.getOrDefault("down4Bucket", BigDecimal.ZERO));
                 ticketDayPc001Count.setVolumeD5Bucket(bucketsMap.getOrDefault("down5Bucket", BigDecimal.ZERO));
 
-
-
-
 //                System.out.println("当前队列长度------：" + queue.size());
 //                System.out.println("最大内存：" + Runtime.getRuntime().maxMemory() / 1024 / 1024 + "MB");
 //                System.out.println("已用内存：" + (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024 / 1024 + "MB");
-
+                System.out.println("-------------queue ing ----------------------------"+queue.size());
                 queue.put(ticketDayPc001Count);
             } catch (InterruptedException e) {
                 Thread t = Thread.currentThread();
@@ -233,10 +228,7 @@ public class DorisQueryExecutor {
                 e.printStackTrace();
             }
         });
-        }
-        catch (Exception e) {
-            System.out.println("----------222---------"+e.getMessage());
-         }
+        return  future;
     }
 
 
@@ -253,7 +245,10 @@ public class DorisQueryExecutor {
                     insertDoris(batch);
                     continue;
                 }
-                if (writingCompleted.get()&&queue.isEmpty()&&batch.isEmpty()) {
+                boolean b = writingCompleted.get();
+                boolean bq = queue.isEmpty();
+                boolean b2= batch.isEmpty();
+                if (writingCompleted.get()&& queue.isEmpty()) {
                     System.out.println("-------sss----提交-------"+batch.size());
                     insertDoris(batch);
                     DatabaseConnectionPoolNew.close();

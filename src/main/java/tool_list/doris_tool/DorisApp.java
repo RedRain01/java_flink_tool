@@ -4,7 +4,10 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DorisApp {
@@ -21,8 +24,8 @@ public class DorisApp {
         Thread monitorThread = new Thread(() -> {
             try {
                 System.out.println("新增doris数---------------");
-                DorisQueryExecutor.writeAllQueueToCsv(writingCompleted,"D:\\ticket_test\\result.csv");
-               // DorisQueryExecutor.monitorAndInsertToDoris(writingCompleted);
+                //   DorisQueryExecutor.writeAllQueueToCsv(writingCompleted,"/mnt/data3/ticket_date/test_csv/result.csv");
+                         DorisQueryExecutor.monitorAndInsertToDoris(writingCompleted);
             } catch (Exception e) {
                 System.out.println("新增doris数据库失败");
                 e.printStackTrace();
@@ -38,20 +41,26 @@ public class DorisApp {
             Statement statement = null;
             ResultSet resultSet = null;
 
+            List<Future<?>> futures = new ArrayList<>();
+
             try {
                 System.out.println("开始清洗数据---------------");
                 connection = DatabaseConnectionPoolNew.getConnection();
                 statement = connection.createStatement();
 
-                //  resultSet = statement.executeQuery("SELECT * from ticket_date_new WHERE ts_code='000017.SZ'  AND trade_date='20240116'");
-              resultSet = statement.executeQuery("SELECT * from ticket_date_new");
+                //    resultSet = statement.executeQuery("SELECT * from ticket_date_new WHERE ts_code='000159.SZ'  AND trade_date='20241118'");
+                 resultSet = statement.executeQuery("SELECT * from ticket_date_new");
                 while (resultSet.next()) {
-                    DorisQueryExecutor.executeQuery(
+                    Future<?> future = DorisQueryExecutor.executeQuery(
                             resultSet.getString("ts_code"),
                             resultSet.getString("trade_date"),
                             resultSet.getBigDecimal("up_limit"),
                             resultSet.getBigDecimal("down_limit")
                     );
+                    futures.add(future);
+                }
+                for (Future<?> future : futures) {
+                    future.get();  // 会阻塞直到该任务完成
                 }
             } catch (Exception e) {
                 System.out.println("-----------SQLException------------------" + e.getMessage());
